@@ -46,6 +46,8 @@
 #include "zmalloc.h"
 
 #define REDIS_NOTUSED(V) ((void) V)
+#define BASE		10
+#define MAX_DATA_SIZE	1024*1024*1024
 
 static struct config {
     aeEventLoop *el;
@@ -58,7 +60,7 @@ static struct config {
     int requests_issued;
     int requests_finished;
     int keysize;
-    int datasize;
+    unsigned long datasize;
     int randomkeys;
     int randomkeys_keyspacelen;
     int keepalive;
@@ -321,7 +323,7 @@ static void showLatencyReport(void) {
         printf("  %d requests completed in %.2f seconds\n", config.requests_finished,
             (float)config.totlatency/1000);
         printf("  %d parallel clients\n", config.numclients);
-        printf("  %d bytes payload\n", config.datasize);
+        printf("  %ld bytes payload\n", config.datasize);
         printf("  keep alive: %d\n", config.keepalive);
         printf("\n");
 
@@ -388,9 +390,9 @@ int parseOptions(int argc, const char **argv) {
             config.hostsocket = strdup(argv[++i]);
         } else if (!strcmp(argv[i],"-d")) {
             if (lastarg) goto invalid;
-            config.datasize = atoi(argv[++i]);
+            config.datasize = strtoul(argv[++i], NULL, BASE);
             if (config.datasize < 1) config.datasize=1;
-            if (config.datasize > 1024*1024*1024) config.datasize = 1024*1024*1024;
+            if (config.datasize > MAX_DATA_SIZE) config.datasize = MAX_DATA_SIZE;
         } else if (!strcmp(argv[i],"-P")) {
             if (lastarg) goto invalid;
             config.pipeline = atoi(argv[++i]);
