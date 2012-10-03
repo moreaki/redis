@@ -48,6 +48,7 @@
 #define REDIS_NOTUSED(V) ((void) V)
 #define BASE		10
 #define MAX_DATA_SIZE	1024*1024*1024
+#define MAX_NW_LATENCY	1000*1000
 
 static struct config {
     aeEventLoop *el;
@@ -60,6 +61,7 @@ static struct config {
     int requests_issued;
     int requests_finished;
     int keysize;
+    int network_latency;
     unsigned long datasize;
     int randomkeys;
     int randomkeys_keyspacelen;
@@ -317,6 +319,10 @@ static void showLatencyReport(void) {
     int i, curlat = 0;
     float perc, reqpersec;
 
+    /* Simulate latency if write calls are to be synchronized to disk or over network */
+    if (config.network_latency)
+        config.totlatency += config.requests_finished * config.network_latency / 1000 / config.numclients;
+
     reqpersec = (float)config.requests_finished/((float)config.totlatency/1000);
     if (!config.quiet && !config.csv) {
         printf("====== %s ======\n", config.title);
@@ -379,6 +385,11 @@ int parseOptions(int argc, const char **argv) {
         } else if (!strcmp(argv[i],"-k")) {
             if (lastarg) goto invalid;
             config.keepalive = atoi(argv[++i]);
+        } else if (!strcmp(argv[i],"-L")) {
+            if (lastarg) goto invalid;
+            config.network_latency = strtoul(argv[++i], NULL, BASE);
+            if (config.network_latency > MAX_NW_LATENCY)
+                config.network_latency = MAX_NW_LATENCY;
         } else if (!strcmp(argv[i],"-h")) {
             if (lastarg) goto invalid;
             config.hostip = strdup(argv[++i]);
@@ -449,6 +460,7 @@ usage:
 " -n <requests>      Total number of requests (default 10000)\n"
 " -d <size>          Data size of SET/GET value in bytes (default 2)\n"
 " -k <boolean>       1=keep alive 0=reconnect (default 1)\n"
+" -L <time>          Number of microseconds of latency introduced for each client operation\n"
 " -r <keyspacelen>   Use random keys for SET/GET/INCR, random values for SADD\n"
 "  Using this option the benchmark will get/set keys\n"
 "  in the form mykey_rand:000000012456 instead of constant\n"
@@ -535,6 +547,7 @@ int main(int argc, const char **argv) {
     config.hostport = 6379;
     config.hostsocket = NULL;
     config.tests = NULL;
+    config.network_latency = 0;
 
     i = parseOptions(argc,argv);
     argc -= i;
